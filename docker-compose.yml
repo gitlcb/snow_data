@@ -1,0 +1,36 @@
+services:
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: snow_admin
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: "mysql://root:root@db:3306/snow_admin"
+      JWT_SECRET: "change-me-in-production-please-use-32-chars-min"
+      NODE_ENV: "production"
+    ports:
+      - "3000:3000"
+    volumes:
+      - uploads:/app/uploads
+    command: sh -c "npx prisma db push --skip-generate && npm run start"
+
+volumes:
+  db_data:
+  uploads:

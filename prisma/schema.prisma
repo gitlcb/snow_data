@@ -1,0 +1,86 @@
+// snow_admin — Prisma schema
+// 通用数据存储系统（迷你 BaaS）数据模型：User → App → Collection → Record
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id
+  email     String   @unique
+  password  String // bcrypt hash
+  name      String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  apps App[]
+
+  @@map("users")
+}
+
+model App {
+  id          String   @id
+  userId      String   @map("user_id")
+  name        String
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKeys ApiKey[]
+  records Record[]
+  files   FileAsset[]
+
+  @@index([userId])
+  @@map("apps")
+}
+
+model ApiKey {
+  id         String    @id
+  appId      String    @map("app_id")
+  name       String
+  keyHash    String    @map("key_hash") // sha256 hash of full key
+  keyPrefix  String    @map("key_prefix") // 展示用前缀，如 sk_live_abc...
+  lastUsedAt DateTime? @map("last_used_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@index([keyHash])
+  @@map("api_keys")
+}
+
+model Record {
+  id         String   @id
+  appId      String   @map("app_id")
+  collection String
+  data       Json
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId, collection, createdAt])
+  @@map("records")
+}
+
+model FileAsset {
+  id          String   @id
+  appId       String   @map("app_id")
+  filename    String
+  storagePath String   @map("storage_path")
+  mimeType    String   @map("mime_type")
+  size        Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@index([appId])
+  @@map("files")
+}
