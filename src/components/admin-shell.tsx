@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { api } from "@/lib/api-client";
 import { toast } from "sonner";
 
@@ -72,8 +73,11 @@ export function AdminShell({
           })}
         </nav>
         <div className="border-t p-3">
-          <div className="mb-2 truncate px-2 text-xs text-muted-foreground">
-            {email}
+          <div className="mb-2 flex items-center justify-between gap-2 px-2">
+            <span className="truncate text-xs text-muted-foreground">
+              {email}
+            </span>
+            <ThemeToggle />
           </div>
           <Button
             variant="ghost"
