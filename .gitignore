@@ -4,6 +4,7 @@ node_modules
 /build
 *.tsbuildinfo
 next-env.d.ts
+.env
 .env*.local
 /uploads
 npm-debug.log*
