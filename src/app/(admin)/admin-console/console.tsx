@@ -7,13 +7,21 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Shield, Trash2, Ban, CheckCircle2, BarChart3 } from "lucide-react";
+import { Shield, Trash2, Ban, CheckCircle2, BarChart3, Megaphone, Plus, Pencil } from "lucide-react";
 import { api, type ApiResponse } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
 import {
   Card,
   CardHeader,
@@ -72,6 +80,25 @@ interface SysConfig {
   uploadAllowedMime: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  body: string;
+  type: string;
+  published: boolean;
+  createdAt: string;
+}
+
+const ANN_TYPES = [
+  { value: "info", label: "通知" },
+  { value: "warning", label: "警告" },
+  { value: "danger", label: "危险" },
+] as const;
+
+function annTypeLabel(t: string) {
+  return ANN_TYPES.find((x) => x.value === t)?.label ?? t;
+}
+
 function formatDate(v: string) {
   return new Date(v).toLocaleString("zh-CN");
 }
@@ -87,11 +114,15 @@ export function AdminConsole() {
       <Tabs defaultValue="users">
         <TabsList>
           <TabsTrigger value="users">用户管理</TabsTrigger>
+          <TabsTrigger value="announcements">公告</TabsTrigger>
           <TabsTrigger value="settings">系统设置</TabsTrigger>
           <TabsTrigger value="linuxdo">Linux Do</TabsTrigger>
         </TabsList>
         <TabsContent value="users">
           <UsersTab />
+        </TabsContent>
+        <TabsContent value="announcements">
+          <AnnouncementsTab />
         </TabsContent>
         <TabsContent value="settings">
           <SettingsTab />
@@ -101,6 +132,299 @@ export function AdminConsole() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function AnnouncementsTab() {
+  const queryClient = useQueryClient();
+  const [editor, setEditor] = useState<{
+    id: string | null;
+    title: string;
+    body: string;
+    type: string;
+    published: boolean;
+  } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
+
+  const { data: list, isLoading } = useQuery<Announcement[]>({
+    queryKey: ["superadmin", "announcements"],
+    queryFn: () => api.get("/superadmin/announcements").then((r) => r.data.data),
+  });
+
+  const saveMutation = useMutation({
+    mutationFn: (vars: {
+      id: string | null;
+      title: string;
+      body: string;
+      type: string;
+      published: boolean;
+    }) => {
+      const payload = {
+        title: vars.title,
+        body: vars.body,
+        type: vars.type,
+        published: vars.published,
+      };
+      return vars.id
+        ? api.patch(`/superadmin/announcements/${vars.id}`, payload)
+        : api.post("/superadmin/announcements", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["superadmin", "announcements"],
+      });
+      toast.success("已保存");
+      setEditor(null);
+    },
+    onError: (e: unknown) =>
+      toast.error(
+        (e as { response?: { data?: ApiResponse<unknown> } })?.response?.data
+          ?.error ?? "保存失败",
+      ),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/superadmin/announcements/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["superadmin", "announcements"],
+      });
+      toast.success("公告已删除");
+      setDeleteTarget(null);
+    },
+    onError: () => toast.error("删除失败"),
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle>公告</CardTitle>
+            <CardDescription>
+              发布的公告会在用户登录进入后台时弹窗展示（每条只弹一次）。草稿不展示。
+            </CardDescription>
+          </div>
+          <Button
+            className="shrink-0"
+            onClick={() =>
+              setEditor({
+                id: null,
+                title: "",
+                body: "",
+                type: "info",
+                published: true,
+              })
+            }
+          >
+            <Plus className="h-4 w-4" />
+            发布公告
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            加载中...
+          </p>
+        ) : !list || list.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            暂无公告。
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>标题</TableHead>
+                <TableHead>类型</TableHead>
+                <TableHead>状态</TableHead>
+                <TableHead>创建时间</TableHead>
+                <TableHead className="text-right">操作</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-medium">{a.title}</TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        a.type === "danger"
+                          ? "destructive"
+                          : a.type === "warning"
+                            ? "default"
+                            : "secondary"
+                      }
+                    >
+                      {annTypeLabel(a.type)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {a.published ? (
+                      <Badge variant="outline">已发布</Badge>
+                    ) : (
+                      <Badge variant="secondary">草稿</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {formatDate(a.createdAt)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="编辑"
+                        onClick={() =>
+                          setEditor({
+                            id: a.id,
+                            title: a.title,
+                            body: a.body,
+                            type: a.type,
+                            published: a.published,
+                          })
+                        }
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="删除"
+                        onClick={() => setDeleteTarget(a)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+
+      <Dialog open={!!editor} onOpenChange={(o) => !o && setEditor(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editor?.id ? "编辑公告" : "发布公告"}</DialogTitle>
+            <DialogDescription>
+              公告内容支持纯文本。关闭「发布」开关将存为草稿，不会向用户弹窗。
+            </DialogDescription>
+          </DialogHeader>
+          {editor && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="ann-title">标题</Label>
+                <Input
+                  id="ann-title"
+                  placeholder="如：系统维护通知"
+                  value={editor.title}
+                  onChange={(e) =>
+                    setEditor({ ...editor, title: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ann-body">正文</Label>
+                <Textarea
+                  id="ann-body"
+                  rows={5}
+                  placeholder="公告正文内容..."
+                  value={editor.body}
+                  onChange={(e) =>
+                    setEditor({ ...editor, body: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>类型</Label>
+                <Select
+                  value={editor.type}
+                  onValueChange={(v) => setEditor({ ...editor, type: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ANN_TYPES.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between rounded-md border px-3 py-2">
+                <div>
+                  <Label>立即发布</Label>
+                  <p className="text-xs text-muted-foreground">
+                    关闭则存为草稿。
+                  </p>
+                </div>
+                <Switch
+                  checked={editor.published}
+                  onCheckedChange={(v) =>
+                    setEditor({ ...editor, published: v })
+                  }
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setEditor(null)}
+              disabled={saveMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              disabled={
+                saveMutation.isPending ||
+                !editor?.title.trim() ||
+                !editor?.body.trim()
+              }
+              onClick={() => editor && saveMutation.mutate(editor)}
+            >
+              {saveMutation.isPending ? "保存中..." : "保存"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!deleteTarget}
+        onOpenChange={(o) => !o && setDeleteTarget(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除公告</DialogTitle>
+            <DialogDescription>
+              确定删除「{deleteTarget?.title}」吗？此操作不可恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteTarget(null)}
+              disabled={deleteMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() =>
+                deleteTarget && deleteMutation.mutate(deleteTarget.id)
+              }
+            >
+              {deleteMutation.isPending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }
 

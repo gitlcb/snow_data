@@ -16,6 +16,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { AnnouncementPopup } from "@/components/announcement-popup";
 import { api } from "@/lib/api-client";
 import { toast } from "sonner";
 
@@ -105,6 +106,7 @@ export function AdminShell({
       <main className="h-screen flex-1 overflow-auto">
         <div className="mx-auto max-w-7xl p-8">{children}</div>
       </main>
+      <AnnouncementPopup />
     </div>
   );
 }

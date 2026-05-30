@@ -24,6 +24,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   apps App[]
+  announcements Announcement[]
 
   @@unique([oauthProvider, oauthId])
   @@map("users")
@@ -140,4 +141,20 @@ model SystemConfig {
   updatedAt           DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+
+model Announcement {
+  id        String   @id
+  authorId  String   @map("author_id")
+  title     String
+  body      String   @db.Text
+  type      String   @default("info") // info | warning | danger
+  published Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([published, createdAt])
+  @@map("announcements")
 }
