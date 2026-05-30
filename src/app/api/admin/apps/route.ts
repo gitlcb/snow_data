@@ -4,6 +4,7 @@ import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser } from "@/lib/require-user";
+import { logger } from "@/lib/logger";
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "应用名称不能为空"),
@@ -23,7 +24,7 @@ export async function GET() {
 
     return ok(apps);
   } catch (error) {
-    console.error("列出应用失败:", error);
+    logger.error("列出应用失败", error);
     return fail("获取应用列表失败", 500);
   }
 }
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
 
     return ok(app, undefined, 201);
   } catch (error) {
-    console.error("创建应用失败:", error);
+    logger.error("创建应用失败", error);
     return fail("创建应用失败", 500);
   }
 }

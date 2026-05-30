@@ -5,9 +5,12 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
 import { generateApiKey } from "@/lib/api-key";
+import { logger } from "@/lib/logger";
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Key 名称不能为空"),
+  scope: z.enum(["readonly", "readwrite"]).default("readwrite"),
+  expiresAt: z.string().datetime().optional().nullable(),
 });
 
 export async function GET(
@@ -28,6 +31,9 @@ export async function GET(
         id: true,
         name: true,
         keyPrefix: true,
+        keyPlain: true,
+        scope: true,
+        expiresAt: true,
         lastUsedAt: true,
         createdAt: true,
       },
@@ -35,7 +41,7 @@ export async function GET(
 
     return ok(keys);
   } catch (error) {
-    console.error("列出 API Key 失败:", error);
+    logger.error("列出 API Key 失败", error);
     return fail("获取 API Key 列表失败", 500);
   }
 }
@@ -63,16 +69,19 @@ export async function POST(
         id: nanoid(),
         appId: id,
         name: parsed.data.name,
+        scope: parsed.data.scope,
+        expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
         keyHash,
         keyPrefix,
+        keyPlain: plain, // 存明文，供随时查看/选用
       },
-      select: { id: true, name: true, keyPrefix: true },
+      select: { id: true, name: true, keyPrefix: true, scope: true, expiresAt: true },
     });
 
-    // plainKey 仅此一次返回，前端需提示用户立即保存
+    // plainKey 同时也已持久化到 keyPlain，列表接口可再次取回
     return ok({ ...created, plainKey: plain }, undefined, 201);
   } catch (error) {
-    console.error("创建 API Key 失败:", error);
+    logger.error("创建 API Key 失败", error);
     return fail("创建 API Key 失败", 500);
   }
 }

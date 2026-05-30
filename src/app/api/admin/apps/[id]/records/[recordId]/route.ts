@@ -4,6 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
+import { logger } from "@/lib/logger";
 
 const updateSchema = z.object({
   data: z
@@ -52,7 +53,7 @@ export async function PATCH(
 
     return ok(record);
   } catch (error) {
-    console.error("更新记录失败:", error);
+    logger.error("更新记录失败", error);
     return fail("更新记录失败", 500);
   }
 }
@@ -74,7 +75,7 @@ export async function DELETE(
 
     return ok({ ok: true });
   } catch (error) {
-    console.error("删除记录失败:", error);
+    logger.error("删除记录失败", error);
     return fail("删除记录失败", 500);
   }
 }

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
+import { logger } from "@/lib/logger";
 
 const updateSchema = z
   .object({
@@ -32,7 +33,7 @@ export async function GET(
 
     return ok(app);
   } catch (error) {
-    console.error("获取应用详情失败:", error);
+    logger.error("获取应用详情失败", error);
     return fail("获取应用详情失败", 500);
   }
 }
@@ -62,7 +63,7 @@ export async function PATCH(
 
     return ok(app);
   } catch (error) {
-    console.error("更新应用失败:", error);
+    logger.error("更新应用失败", error);
     return fail("更新应用失败", 500);
   }
 }
@@ -82,7 +83,7 @@ export async function DELETE(
 
     return ok({ ok: true });
   } catch (error) {
-    console.error("删除应用失败:", error);
+    logger.error("删除应用失败", error);
     return fail("删除应用失败", 500);
   }
 }

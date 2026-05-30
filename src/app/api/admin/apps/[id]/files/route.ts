@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
 import { storeUpload } from "@/lib/file-storage";
+import { checkUpload } from "@/app/api/v1/_lib/validation";
+import { logger } from "@/lib/logger";
 
 export async function GET(
   req: NextRequest,
@@ -42,7 +44,7 @@ export async function GET(
 
     return ok(data, { total, page, limit });
   } catch (error) {
-    console.error("列出文件失败:", error);
+    logger.error("列出文件失败", error);
     return fail("获取文件列表失败", 500);
   }
 }
@@ -70,6 +72,11 @@ export async function POST(
     if (!(file instanceof File)) {
       return fail("缺少文件字段 file", 400);
     }
+    const mime = file.type || "application/octet-stream";
+    const check = await checkUpload(file.size, mime);
+    if (!check.ok) {
+      return fail(check.error!, check.status!);
+    }
 
     const { storagePath, filename } = await storeUpload(appId, file);
 
@@ -79,7 +86,7 @@ export async function POST(
         appId,
         filename,
         storagePath,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: mime,
         size: file.size,
       },
     });
@@ -97,7 +104,7 @@ export async function POST(
       201,
     );
   } catch (error) {
-    console.error("上传文件失败:", error);
+    logger.error("上传文件失败", error);
     return fail("文件上传失败", 500);
   }
 }

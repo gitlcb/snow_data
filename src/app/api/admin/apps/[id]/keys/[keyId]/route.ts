@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
+import { logger } from "@/lib/logger";
 
 export async function DELETE(
   _req: NextRequest,
@@ -25,7 +26,7 @@ export async function DELETE(
 
     return ok({ ok: true });
   } catch (error) {
-    console.error("删除 API Key 失败:", error);
+    logger.error("删除 API Key 失败", error);
     return fail("删除 API Key 失败", 500);
   }
 }

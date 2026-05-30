@@ -5,6 +5,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
+import { safeParse } from "@/lib/record-query";
+import { logger } from "@/lib/logger";
 
 const createSchema = z.object({
   collection: z.string().trim().min(1, "集合名称不能为空"),
@@ -53,20 +55,22 @@ export async function GET(
         "SELECT COUNT(*) AS cnt FROM records WHERE app_id = ? AND collection = ? AND CAST(data AS CHAR) LIKE ?";
       const like = `%${q}%`;
 
-      const rows = await prisma.$queryRawUnsafe<RawRecord[]>(
-        dataSql,
-        id,
-        collection,
-        like,
-        limit,
-        skip,
-      );
-      const countRes = await prisma.$queryRawUnsafe<{ cnt: bigint }[]>(
-        countSql,
-        id,
-        collection,
-        like,
-      );
+      const [rows, countRes] = await Promise.all([
+        prisma.$queryRawUnsafe<RawRecord[]>(
+          dataSql,
+          id,
+          collection,
+          like,
+          limit,
+          skip,
+        ),
+        prisma.$queryRawUnsafe<{ cnt: bigint }[]>(
+          countSql,
+          id,
+          collection,
+          like,
+        ),
+      ]);
       const total = Number(countRes[0]?.cnt ?? 0);
 
       const records = rows.map((r) => ({
@@ -92,7 +96,7 @@ export async function GET(
 
     return ok(rows, { total, page, limit });
   } catch (error) {
-    console.error("获取记录列表失败:", error);
+    logger.error("获取记录列表失败", error);
     return fail("获取记录列表失败", 500);
   }
 }
@@ -126,15 +130,7 @@ export async function POST(
 
     return ok(record, undefined, 201);
   } catch (error) {
-    console.error("创建记录失败:", error);
+    logger.error("创建记录失败", error);
     return fail("创建记录失败", 500);
-  }
-}
-
-function safeParse(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return s;
   }
 }

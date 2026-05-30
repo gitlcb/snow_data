@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
 import { absoluteStoragePath } from "@/lib/file-storage";
+import { logger } from "@/lib/logger";
 
 export async function DELETE(
   _req: NextRequest,
@@ -24,12 +25,14 @@ export async function DELETE(
 
     await prisma.fileAsset.delete({ where: { id: asset.id } });
 
-    // 尽量删除磁盘文件，失败忽略不报错
-    await unlink(absoluteStoragePath(asset.storagePath)).catch(() => {});
+    // 尽量删除磁盘文件，失败仅记录不阻断（避免留下孤儿 DB 记录）
+    await unlink(absoluteStoragePath(asset.storagePath)).catch((e) =>
+      logger.warn("删除磁盘文件失败", e),
+    );
 
     return ok({ ok: true });
   } catch (error) {
-    console.error("删除文件失败:", error);
+    logger.error("删除文件失败", error);
     return fail("删除文件失败", 500);
   }
 }

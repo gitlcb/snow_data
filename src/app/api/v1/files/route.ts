@@ -1,58 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { ok, fail } from "@/lib/api-response";
-import { resolveApiKey } from "@/lib/api-key";
+import { ok, fail, tooMany } from "@/lib/api-response";
+import { resolveApiKey, canWrite } from "@/lib/api-key";
 import { storeUpload } from "@/lib/file-storage";
+import { checkUpload } from "../_lib/validation";
+import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+import { withCors } from "../_lib/cors";
 
-// 内联 CORS，避免与其他 v1 模块的共享文件产生依赖竞态
-const CORS: Record<string, string> = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-  "Access-Control-Allow-Headers": "Authorization, Content-Type",
-  "Access-Control-Max-Age": "86400",
-};
-
-function cors<T extends Response>(res: T): T {
-  for (const [k, v] of Object.entries(CORS)) res.headers.set(k, v);
-  return res;
-}
-
-export async function OPTIONS() {
-  return cors(new NextResponse(null, { status: 204 }));
+export async function OPTIONS(req: NextRequest) {
+  return withCors(new NextResponse(null, { status: 204 }), req);
 }
 
 export async function POST(req: NextRequest) {
   try {
     const resolved = await resolveApiKey(req.headers.get("authorization"));
-    if (!resolved) return cors(fail("无效的 API Key", 401));
+    if (!resolved) return withCors(fail("无效的 API Key", 401), req);
+    const { appId, apiKeyId } = resolved;
+
+    if (!canWrite(resolved)) return withCors(fail("该 Key 为只读，无写入权限", 403), req);
+
+    const rl = rateLimit(`v1upload:${apiKeyId}`, 30, 60_000);
+    if (!rl.ok) return withCors(tooMany(rl.retryAfter), req);
 
     let form: FormData;
     try {
       form = await req.formData();
     } catch {
-      return cors(fail("请求需为 multipart/form-data", 400));
+      return withCors(fail("请求需为 multipart/form-data", 400), req);
     }
 
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return cors(fail("缺少文件字段 file", 400));
+      return withCors(fail("缺少文件字段 file", 400), req);
+    }
+    const mime = file.type || "application/octet-stream";
+    const check = await checkUpload(file.size, mime);
+    if (!check.ok) {
+      return withCors(fail(check.error!, check.status!), req);
     }
 
-    const { storagePath, filename } = await storeUpload(resolved.appId, file);
+    const { storagePath, filename } = await storeUpload(appId, file);
 
     const asset = await prisma.fileAsset.create({
       data: {
         id: nanoid(),
-        appId: resolved.appId,
+        appId,
         filename,
         storagePath,
-        mimeType: file.type || "application/octet-stream",
+        mimeType: mime,
         size: file.size,
       },
     });
 
-    return cors(
+    return withCors(
       ok(
         {
           id: asset.id,
@@ -64,9 +66,10 @@ export async function POST(req: NextRequest) {
         undefined,
         201,
       ),
+      req,
     );
   } catch (error) {
-    console.error("v1 文件上传失败:", error);
-    return cors(fail("文件上传失败", 500));
+    logger.error("v1 文件上传失败", error);
+    return withCors(fail("文件上传失败", 500), req);
   }
 }

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { ok, fail } from "@/lib/api-response";
 import { requireUser } from "@/lib/require-user";
+import { logger } from "@/lib/logger";
 
 interface DailyTrendRow {
   date: string;
@@ -124,7 +125,7 @@ export async function GET() {
       dailyTrend,
     });
   } catch (error) {
-    console.error("stats GET failed:", error);
+    logger.error("stats GET failed", error);
     return fail("获取统计数据失败", 500);
   }
 }

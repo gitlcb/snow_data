@@ -4,6 +4,7 @@ import { ok, fail } from "@/lib/api-response";
 import { requireUser, assertAppOwner } from "@/lib/require-user";
 import { logger } from "@/lib/logger";
 
+// 列出某 App 下的终端用户
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -15,21 +16,28 @@ export async function GET(
     const { id } = await params;
     if (!(await assertAppOwner(id, user.userId))) return fail("无权访问", 403);
 
-    const groups = await prisma.record.groupBy({
-      by: ["collection"],
+    const users = await prisma.endUser.findMany({
       where: { appId: id },
-      _count: true,
-      orderBy: { collection: "asc" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, email: true, createdAt: true },
     });
 
-    const result = groups.map((g) => ({
-      collection: g.collection,
-      count: g._count,
+    // 各终端用户拥有的记录数（按 ownerId 聚合）
+    const grouped = await prisma.record.groupBy({
+      by: ["ownerId"],
+      where: { appId: id, ownerId: { not: null } },
+      _count: true,
+    });
+    const countMap = new Map(grouped.map((g) => [g.ownerId, g._count]));
+
+    const result = users.map((u) => ({
+      ...u,
+      recordCount: countMap.get(u.id) ?? 0,
     }));
 
     return ok(result);
   } catch (error) {
-    logger.error("获取集合列表失败", error);
-    return fail("获取集合列表失败", 500);
+    logger.error("列出终端用户失败", error);
+    return fail("获取终端用户列表失败", 500);
   }
 }
