@@ -16,10 +16,24 @@ function genKey() {
 }
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.log("生产环境禁止运行 seed，已跳过。");
+    return;
+  }
+
   const email = "admin@snow.dev";
+  const password = process.env.SEED_ADMIN_PASSWORD ?? "admin123";
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log("种子用户已存在，跳过。登录：admin@snow.dev / admin123");
+    // 确保已存在的种子账号是超级管理员
+    if (existing.role !== "superadmin") {
+      await prisma.user.update({
+        where: { id: existing.id },
+        data: { role: "superadmin" },
+      });
+      console.log("已将种子账号升级为超级管理员。");
+    }
+    console.log("种子用户已存在，跳过。");
     return;
   }
 
@@ -27,8 +41,9 @@ async function main() {
     data: {
       id: nanoid(),
       email,
-      password: await bcrypt.hash("admin123", 10),
+      password: await bcrypt.hash(password, 10),
       name: "Admin",
+      role: "superadmin",
     },
   });
 
@@ -49,6 +64,7 @@ async function main() {
       name: "默认 Key",
       keyHash: key.keyHash,
       keyPrefix: key.keyPrefix,
+      keyPlain: key.plain,
     },
   });
 
@@ -64,7 +80,7 @@ async function main() {
   }
 
   console.log("种子完成：");
-  console.log("  登录账号: admin@snow.dev / admin123");
+  console.log(`  登录账号: ${email} / ${password}`);
   console.log("  示例 App:", app.name);
   console.log("  完整 API Key（仅此一次）:", key.plain);
 }

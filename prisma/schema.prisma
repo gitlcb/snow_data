@@ -13,13 +13,19 @@ datasource db {
 model User {
   id        String   @id
   email     String   @unique
-  password  String // bcrypt hash
+  password  String? // bcrypt hash；OAuth 用户无密码故可空
   name      String?
+  role      String   @default("user") // user | superadmin
+  disabled  Boolean  @default(false) // 禁用后不可登录
+  oauthProvider String? @map("oauth_provider") // "linuxdo" | null
+  oauthId       String? @map("oauth_id") // 第三方不可变用户 id
+  avatarUrl     String? @map("avatar_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   apps App[]
 
+  @@unique([oauthProvider, oauthId])
   @@map("users")
 }
 
@@ -31,10 +37,12 @@ model App {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user    User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   apiKeys ApiKey[]
   records Record[]
   files   FileAsset[]
+  endUsers   EndUser[]
+  usageStats UsageStat[]
 
   @@index([userId])
   @@map("apps")
@@ -46,6 +54,9 @@ model ApiKey {
   name       String
   keyHash    String    @map("key_hash") // sha256 hash of full key
   keyPrefix  String    @map("key_prefix") // 展示用前缀，如 sk_live_abc...
+  keyPlain   String?   @map("key_plain") @db.VarChar(80) // 完整明文，供随时查看/选用；老 key 为空不可回填
+  scope      String    @default("readwrite") // readonly | readwrite
+  expiresAt  DateTime? @map("expires_at") // 为空表示永不过期
   lastUsedAt DateTime? @map("last_used_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
@@ -60,6 +71,7 @@ model Record {
   id         String   @id
   appId      String   @map("app_id")
   collection String
+  ownerId    String?  @map("owner_id") // 终端用户归属；为空=App Key 写入的共享记录
   data       Json
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
@@ -67,6 +79,7 @@ model Record {
   app App @relation(fields: [appId], references: [id], onDelete: Cascade)
 
   @@index([appId, collection, createdAt])
+  @@index([appId, collection, ownerId])
   @@map("records")
 }
 
@@ -83,4 +96,48 @@ model FileAsset {
 
   @@index([appId])
   @@map("files")
+}
+
+model EndUser {
+  id        String   @id
+  appId     String   @map("app_id")
+  email     String
+  password  String // bcrypt hash
+  createdAt DateTime @default(now()) @map("created_at")
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, email]) // 同 App 内邮箱唯一，跨 App 可重复
+  @@index([appId])
+  @@map("end_users")
+}
+
+model UsageStat {
+  id          String   @id
+  appId       String   @map("app_id")
+  apiKeyId    String?  @map("api_key_id")
+  bucket      DateTime // 截断到整点的时间桶
+  method      String
+  statusClass String   @map("status_class") // 2xx | 4xx | 5xx
+  count       Int      @default(0)
+
+  app App @relation(fields: [appId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, apiKeyId, bucket, method, statusClass])
+  @@index([appId, bucket])
+  @@map("usage_stats")
+}
+
+// 全局系统配置：单行表（id 固定 "singleton"）
+model SystemConfig {
+  id                  String   @id @default("singleton")
+  registrationOpen    Boolean  @default(true) @map("registration_open")
+  linuxdoEnabled      Boolean  @default(false) @map("linuxdo_enabled")
+  linuxdoClientId     String?  @map("linuxdo_client_id")
+  linuxdoClientSecret String?  @map("linuxdo_client_secret")
+  uploadMaxBytes      Int      @default(10485760) @map("upload_max_bytes") // 10MB
+  uploadAllowedMime   String   @default("") @db.VarChar(2000) @map("upload_allowed_mime") // 逗号分隔，空=全允许
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
 }
