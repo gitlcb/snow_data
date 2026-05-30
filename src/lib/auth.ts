@@ -1,16 +1,14 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
+import { COOKIE_NAME, SESSION_MAX_AGE, getJwtSecret } from "@/lib/auth-secret";
 
-const SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "dev-secret-change-me-in-production-please-32chars",
-);
-const COOKIE_NAME = "snow_session";
-const MAX_AGE = 60 * 60 * 24 * 7; // 7 天
+const MAX_AGE = SESSION_MAX_AGE;
 
 export interface SessionPayload {
   userId: string;
   email: string;
+  role: string; // user | superadmin
 }
 
 export async function hashPassword(plain: string): Promise<string> {
@@ -29,7 +27,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(`${MAX_AGE}s`)
-    .sign(SECRET);
+    .sign(getJwtSecret());
 
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
@@ -46,8 +44,12 @@ export async function getSession(): Promise<SessionPayload | null> {
   const token = store.get(COOKIE_NAME)?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, SECRET);
-    return { userId: payload.userId as string, email: payload.email as string };
+    const { payload } = await jwtVerify(token, getJwtSecret());
+    return {
+      userId: payload.userId as string,
+      email: payload.email as string,
+      role: (payload.role as string) ?? "user",
+    };
   } catch {
     return null;
   }

@@ -23,3 +23,11 @@ export function fail(error: string, status = 400) {
   const body: ApiResponse<never> = { success: false, error };
   return NextResponse.json(body, { status });
 }
+
+export function tooMany(retryAfter: number) {
+  const body: ApiResponse<never> = { success: false, error: "请求过于频繁，请稍后再试" };
+  return NextResponse.json(body, {
+    status: 429,
+    headers: { "Retry-After": String(retryAfter) },
+  });
+}
