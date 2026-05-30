@@ -12,9 +12,10 @@ import {
   Pencil,
   Trash2,
   Plus,
-  Copy,
-  Check,
   KeyRound,
+  Users,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
@@ -46,6 +47,14 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { CopyButton } from "@/components/copy-button";
 
 interface AppDetail {
   id: string;
@@ -59,6 +68,9 @@ interface ApiKeyItem {
   id: string;
   name: string;
   keyPrefix: string;
+  keyPlain?: string | null;
+  scope: string;
+  expiresAt?: string | null;
   lastUsedAt?: string | null;
   createdAt: string;
 }
@@ -67,26 +79,49 @@ interface CreatedKey extends ApiKeyItem {
   plainKey: string;
 }
 
+interface EndUserItem {
+  id: string;
+  email: string;
+  recordCount: number;
+  createdAt: string;
+}
+
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleString("zh-CN") : "—";
 }
 
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      toast.success("已复制");
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      toast.error("复制失败");
-    }
+// 密钥单元格：有明文则可显示/隐藏/复制完整 Key；老 key 无明文，仅展示前缀并提示重新生成
+function KeyCell({ item }: { item: ApiKeyItem }) {
+  const [show, setShow] = useState(false);
+  if (!item.keyPlain) {
+    return (
+      <div className="flex flex-col gap-0.5">
+        <Badge variant="secondary" className="w-fit font-mono">
+          {item.keyPrefix}
+        </Badge>
+        <span className="text-xs text-muted-foreground">
+          旧 Key 不可查看，重新生成可显示完整值
+        </span>
+      </div>
+    );
   }
   return (
-    <Button variant="outline" size="icon" onClick={copy} type="button">
-      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-    </Button>
+    <div className="flex items-center gap-1">
+      <code className="rounded bg-muted px-2 py-1 font-mono text-xs">
+        {show ? item.keyPlain : `${item.keyPrefix}••••`}
+      </code>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        type="button"
+        onClick={() => setShow((s) => !s)}
+        title={show ? "隐藏" : "显示"}
+      >
+        {show ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+      </Button>
+      <CopyButton value={item.keyPlain} variant="ghost" size="icon" />
+    </div>
   );
 }
 
@@ -106,13 +141,25 @@ export default function AppDetailPage() {
     queryFn: () => api.get(`/admin/apps/${id}/keys`).then((r) => r.data.data),
   });
 
+  const { data: endUsers } = useQuery<EndUserItem[]>({
+    queryKey: ["app", id, "users"],
+    queryFn: () => api.get(`/admin/apps/${id}/users`).then((r) => r.data.data),
+  });
+
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [newKeyOpen, setNewKeyOpen] = useState(false);
   const [newKeyName, setNewKeyName] = useState("");
+  const [newKeyScope, setNewKeyScope] = useState("readwrite");
+  const [newKeyExpiry, setNewKeyExpiry] = useState("");
   const [createdKey, setCreatedKey] = useState<CreatedKey | null>(null);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<ApiKeyItem | null>(
+    null,
+  );
+  const [pendingDeleteUser, setPendingDeleteUser] =
+    useState<EndUserItem | null>(null);
 
   const editMutation = useMutation({
     mutationFn: (payload: { name: string; description?: string }) =>
@@ -137,7 +184,11 @@ export default function AppDetailPage() {
   });
 
   const createKeyMutation = useMutation({
-    mutationFn: (payload: { name: string }) =>
+    mutationFn: (payload: {
+      name: string;
+      scope: string;
+      expiresAt?: string | null;
+    }) =>
       api
         .post(`/admin/apps/${id}/keys`, payload)
         .then((r) => r.data.data as CreatedKey),
@@ -147,6 +198,8 @@ export default function AppDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["app", id] });
       setNewKeyOpen(false);
       setNewKeyName("");
+      setNewKeyScope("readwrite");
+      setNewKeyExpiry("");
       setCreatedKey(data);
     },
     onError: () => toast.error("生成 Key 失败"),
@@ -160,8 +213,23 @@ export default function AppDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["apps"] });
       queryClient.invalidateQueries({ queryKey: ["app", id] });
       toast.success("Key 已删除");
+      setPendingDeleteKey(null);
     },
     onError: () => toast.error("删除 Key 失败"),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api
+        .delete(`/admin/apps/${id}/users/${userId}`)
+        .then((r) => r.data.data as { deletedRecords: number }),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["app", id, "users"] });
+      queryClient.invalidateQueries({ queryKey: ["app", id] });
+      toast.success(`终端用户已删除，连带清理 ${data.deletedRecords} 条记录`);
+      setPendingDeleteUser(null);
+    },
+    onError: () => toast.error("删除终端用户失败"),
   });
 
   function openEdit() {
@@ -185,7 +253,12 @@ export default function AppDetailPage() {
       toast.error("请输入 Key 名称");
       return;
     }
-    createKeyMutation.mutate({ name: trimmed });
+    createKeyMutation.mutate({
+      name: trimmed,
+      scope: newKeyScope,
+      // datetime-local 值转 ISO；为空则不过期
+      expiresAt: newKeyExpiry ? new Date(newKeyExpiry).toISOString() : null,
+    });
   }
 
   if (isLoading) {
@@ -294,33 +367,112 @@ export default function AppDetailPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>名称</TableHead>
-                  <TableHead>前缀</TableHead>
+                  <TableHead>Key</TableHead>
+                  <TableHead>权限</TableHead>
+                  <TableHead>过期</TableHead>
                   <TableHead>最后使用</TableHead>
-                  <TableHead>创建时间</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {keys.map((key) => (
-                  <TableRow key={key.id}>
-                    <TableCell className="font-medium">{key.name}</TableCell>
+                {keys.map((key) => {
+                  const expired =
+                    key.expiresAt && new Date(key.expiresAt) <= new Date();
+                  return (
+                    <TableRow key={key.id}>
+                      <TableCell className="font-medium">{key.name}</TableCell>
+                      <TableCell>
+                        <KeyCell item={key} />
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            key.scope === "readonly" ? "outline" : "default"
+                          }
+                        >
+                          {key.scope === "readonly" ? "只读" : "读写"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {key.expiresAt ? (
+                          <span className={expired ? "text-destructive" : ""}>
+                            {formatDate(key.expiresAt)}
+                            {expired ? "（已过期）" : ""}
+                          </span>
+                        ) : (
+                          "永不"
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatDate(key.lastUsedAt)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setPendingDeleteKey(key)}
+                          disabled={
+                            deleteKeyMutation.isPending &&
+                            deleteKeyMutation.variables === key.id
+                          }
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            终端用户
+          </CardTitle>
+          <CardDescription>
+            通过 App Key 调用 /api/v1/auth/register 与 login
+            注册登录的最终用户，其数据按 owner 隔离，互不可见。
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!endUsers || endUsers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              还没有终端用户。
+            </p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>邮箱</TableHead>
+                  <TableHead>记录数</TableHead>
+                  <TableHead>注册时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {endUsers.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.email}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="font-mono">
-                        {key.keyPrefix}
-                      </Badge>
+                      <Badge variant="secondary">{u.recordCount}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {formatDate(key.lastUsedAt)}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {formatDate(key.createdAt)}
+                      {formatDate(u.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => deleteKeyMutation.mutate(key.id)}
-                        disabled={deleteKeyMutation.isPending}
+                        onClick={() => setPendingDeleteUser(u)}
+                        disabled={
+                          deleteUserMutation.isPending &&
+                          deleteUserMutation.variables === u.id
+                        }
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
                       </Button>
@@ -414,6 +566,27 @@ export default function AppDetailPage() {
               placeholder="例如：生产环境"
             />
           </div>
+          <div className="space-y-2">
+            <Label>权限范围</Label>
+            <Select value={newKeyScope} onValueChange={setNewKeyScope}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="readwrite">读写（可读可写）</SelectItem>
+                <SelectItem value="readonly">只读（仅查询）</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="key-expiry">过期时间（留空=永不过期）</Label>
+            <Input
+              id="key-expiry"
+              type="datetime-local"
+              value={newKeyExpiry}
+              onChange={(e) => setNewKeyExpiry(e.target.value)}
+            />
+          </div>
           <DialogFooter>
             <Button
               variant="outline"
@@ -459,6 +632,75 @@ export default function AppDetailPage() {
           </div>
           <DialogFooter>
             <Button onClick={() => setCreatedKey(null)}>我已保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!pendingDeleteKey}
+        onOpenChange={(o) => !o && setPendingDeleteKey(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除 API Key</DialogTitle>
+            <DialogDescription>
+              确定要删除「{pendingDeleteKey?.name}」吗？使用该 Key
+              的集成将立即失效，此操作不可恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeleteKey(null)}
+              disabled={deleteKeyMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteKeyMutation.isPending}
+              onClick={() =>
+                pendingDeleteKey &&
+                deleteKeyMutation.mutate(pendingDeleteKey.id)
+              }
+            >
+              {deleteKeyMutation.isPending ? "删除中..." : "确认删除"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!pendingDeleteUser}
+        onOpenChange={(o) => !o && setPendingDeleteUser(null)}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>删除终端用户</DialogTitle>
+            <DialogDescription>
+              确定要删除「{pendingDeleteUser?.email}」吗？该用户拥有的{" "}
+              {pendingDeleteUser?.recordCount ?? 0}{" "}
+              条记录将被一并删除，此操作不可恢复。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPendingDeleteUser(null)}
+              disabled={deleteUserMutation.isPending}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteUserMutation.isPending}
+              onClick={() =>
+                pendingDeleteUser &&
+                deleteUserMutation.mutate(pendingDeleteUser.id)
+              }
+            >
+              {deleteUserMutation.isPending ? "删除中..." : "确认删除"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

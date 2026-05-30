@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Snowflake, Loader2 } from "lucide-react";
@@ -23,11 +23,42 @@ interface AuthData {
   email: string;
 }
 
+interface PublicConfig {
+  registrationOpen: boolean;
+  linuxdoEnabled: boolean;
+}
+
+const OAUTH_ERROR_MSG: Record<string, string> = {
+  state: "登录会话失效，请重试",
+  token: "Linux Do 授权失败，请重试",
+  profile: "无法获取 Linux Do 用户信息",
+  disabled: "Linux Do 登录未启用",
+  disabled_user: "账号已被禁用，请联系管理员",
+  registration_closed: "注册已关闭，无法创建新账号",
+  server: "登录失败，请稍后重试",
+};
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
+
+  useEffect(() => {
+    api
+      .get<ApiResponse<PublicConfig>>("/auth/public-config")
+      .then((r) => setConfig(r.data.data ?? null))
+      .catch(() => setConfig(null));
+
+    // 处理 OAuth 回调带回的错误
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("oauth_error");
+    if (err) {
+      toast.error(OAUTH_ERROR_MSG[err] ?? "登录失败");
+      window.history.replaceState({}, "", "/login");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,15 +133,36 @@ export default function LoginPage() {
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
               {loading ? "处理中…" : "登录"}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              没有账号？{" "}
-              <Link
-                href="/register"
-                className="text-primary font-medium hover:underline"
-              >
-                去注册
-              </Link>
-            </p>
+            {config?.linuxdoEnabled && (
+              <>
+                <div className="flex w-full items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  或
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => {
+                    window.location.href = "/api/auth/oauth/linuxdo";
+                  }}
+                >
+                  使用 Linux Do 登录
+                </Button>
+              </>
+            )}
+            {config?.registrationOpen !== false && (
+              <p className="text-sm text-muted-foreground">
+                没有账号？{" "}
+                <Link
+                  href="/register"
+                  className="text-primary font-medium hover:underline"
+                >
+                  去注册
+                </Link>
+              </p>
+            )}
           </CardFooter>
         </form>
       </Card>

@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, type ApiResponse } from "@/lib/api-client";
+import { useApps } from "@/hooks/use-apps";
 import { toast } from "sonner";
 import {
   Upload,
@@ -35,11 +36,6 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-
-interface AppItem {
-  id: string;
-  name: string;
-}
 
 interface FileItem {
   id: string;
@@ -74,13 +70,7 @@ export default function FilesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [pendingDelete, setPendingDelete] = useState<FileItem | null>(null);
 
-  const { data: apps } = useQuery<AppItem[]>({
-    queryKey: ["apps"],
-    queryFn: async () => {
-      const res = await api.get<ApiResponse<AppItem[]>>("/admin/apps");
-      return res.data.data ?? [];
-    },
-  });
+  const { data: apps } = useApps();
 
   const filesKey = ["files", appId] as const;
   const {
@@ -218,7 +208,12 @@ export default function FilesPage() {
                       <img
                         src={file.url}
                         alt={file.filename}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-contain"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
                       />
                     ) : (
                       <FileIcon className="h-12 w-12 text-muted-foreground" />

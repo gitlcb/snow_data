@@ -7,6 +7,9 @@ import {
   Boxes,
   Database,
   FileImage,
+  Activity,
+  BookOpen,
+  Shield,
   LogOut,
   Snowflake,
 } from "lucide-react";
@@ -21,17 +24,26 @@ const NAV = [
   { href: "/apps", label: "应用管理", icon: Boxes },
   { href: "/data", label: "数据浏览", icon: Database },
   { href: "/files", label: "文件管理", icon: FileImage },
+  { href: "/usage", label: "用量", icon: Activity },
+  { href: "/docs", label: "API 文档", icon: BookOpen },
 ];
 
 export function AdminShell({
   email,
+  role,
   children,
 }: {
   email: string;
+  role?: string;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+
+  const nav =
+    role === "superadmin"
+      ? [...NAV, { href: "/admin-console", label: "超级管理", icon: Shield }]
+      : NAV;
 
   async function logout() {
     try {
@@ -45,13 +57,13 @@ export function AdminShell({
 
   return (
     <div className="flex min-h-screen bg-muted/30">
-      <aside className="flex w-60 flex-col border-r bg-sidebar">
-        <div className="flex h-14 items-center gap-2 border-b px-5">
+      <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r bg-sidebar">
+        <div className="flex h-14 shrink-0 items-center gap-2 border-b px-5">
           <Snowflake className="h-5 w-5 text-primary" />
           <span className="font-semibold tracking-tight">Snow Admin</span>
         </div>
-        <nav className="flex-1 space-y-1 p-3">
-          {NAV.map((item) => {
+        <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+          {nav.map((item) => {
             const active =
               pathname === item.href || pathname.startsWith(item.href + "/");
             const Icon = item.icon;
@@ -72,7 +84,7 @@ export function AdminShell({
             );
           })}
         </nav>
-        <div className="border-t p-3">
+        <div className="shrink-0 border-t p-3">
           <div className="mb-2 flex items-center justify-between gap-2 px-2">
             <span className="truncate text-xs text-muted-foreground">
               {email}
@@ -90,7 +102,7 @@ export function AdminShell({
           </Button>
         </div>
       </aside>
-      <main className="flex-1 overflow-auto">
+      <main className="h-screen flex-1 overflow-auto">
         <div className="mx-auto max-w-7xl p-8">{children}</div>
       </main>
     </div>

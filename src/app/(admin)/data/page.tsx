@@ -6,10 +6,11 @@ import {
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Download, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
 import type { ApiResponse } from "@/lib/api-client";
+import { useApps } from "@/hooks/use-apps";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,11 +40,6 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-
-interface AppItem {
-  id: string;
-  name: string;
-}
 
 interface CollectionItem {
   collection: string;
@@ -92,14 +88,8 @@ export default function DataPage() {
   const [editTarget, setEditTarget] = useState<RecordItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RecordItem | null>(null);
 
-  // 本地获取 app 列表，避免与 use-apps 耦合产生竞态
-  const { data: apps = [] } = useQuery<AppItem[]>({
-    queryKey: ["apps"],
-    queryFn: () =>
-      api
-        .get<ApiResponse<AppItem[]>>("/admin/apps")
-        .then((r) => r.data.data ?? []),
-  });
+  // 复用共享 useApps，单一数据源
+  const { data: apps = [] } = useApps();
 
   const { data: collections = [] } = useQuery<CollectionItem[]>({
     queryKey: ["collections", appId],
@@ -179,6 +169,39 @@ export default function DataPage() {
     setSearch("");
   }
 
+  async function handleExport(format: "json" | "csv") {
+    try {
+      const res = await api.get(
+        `/admin/apps/${appId}/records/export`,
+        { params: { collection, format }, responseType: "blob" },
+      );
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${collection}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("导出失败");
+    }
+  }
+
+  const importMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      return api.post(`/admin/apps/${appId}/records/import`, json, {
+        params: { collection },
+      });
+    },
+    onSuccess: (r) => {
+      const n = (r.data as { data?: { imported?: number } })?.data?.imported ?? 0;
+      toast.success(`已导入 ${n} 条`);
+      invalidateRecords();
+    },
+    onError: (e: unknown) => toast.error(extractError(e, "导入失败（请检查 JSON 格式）")),
+  });
+
   const ready = !!appId && !!collection;
 
   return (
@@ -186,10 +209,43 @@ export default function DataPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">数据浏览</h1>
         {ready && (
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            新增记录
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => handleExport("json")}>
+              <Download className="h-4 w-4" />
+              JSON
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport("csv")}>
+              <Download className="h-4 w-4" />
+              CSV
+            </Button>
+            <label>
+              <input
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) importMutation.mutate(f);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                disabled={importMutation.isPending}
+              >
+                <span className="cursor-pointer">
+                  <Upload className="h-4 w-4" />
+                  导入
+                </span>
+              </Button>
+            </label>
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" />
+              新增记录
+            </Button>
+          </div>
         )}
       </div>
 

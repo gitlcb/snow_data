@@ -177,7 +177,7 @@ export default function DashboardPage() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="hsl(var(--border))"
+                  stroke="var(--border)"
                   opacity={0.4}
                 />
                 <XAxis
@@ -186,19 +186,21 @@ export default function DashboardPage() {
                   tickLine={false}
                   axisLine={false}
                   minTickGap={24}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
                 />
                 <YAxis
                   allowDecimals={false}
                   tickLine={false}
                   axisLine={false}
                   width={36}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                  tick={{ fontSize: 12, fill: "var(--muted-foreground)" }}
                 />
                 <Tooltip
                   contentStyle={{
                     borderRadius: 8,
-                    border: "1px solid hsl(var(--border))",
+                    border: "1px solid var(--border)",
+                    background: "var(--popover)",
+                    color: "var(--popover-foreground)",
                     fontSize: 12,
                   }}
                   labelFormatter={(l) => `日期 ${l}`}
@@ -243,7 +245,7 @@ export default function DashboardPage() {
                   <CartesianGrid
                     horizontal={false}
                     strokeDasharray="3 3"
-                    stroke="hsl(var(--border))"
+                    stroke="var(--border)"
                     opacity={0.4}
                   />
                   <XAxis
@@ -253,7 +255,7 @@ export default function DashboardPage() {
                     axisLine={false}
                     tick={{
                       fontSize: 12,
-                      fill: "hsl(var(--muted-foreground))",
+                      fill: "var(--muted-foreground)",
                     }}
                   />
                   <YAxis
@@ -264,14 +266,16 @@ export default function DashboardPage() {
                     axisLine={false}
                     tick={{
                       fontSize: 12,
-                      fill: "hsl(var(--muted-foreground))",
+                      fill: "var(--muted-foreground)",
                     }}
                   />
                   <Tooltip
-                    cursor={{ fill: "hsl(var(--muted))", opacity: 0.4 }}
+                    cursor={{ fill: "var(--muted)", opacity: 0.4 }}
                     contentStyle={{
                       borderRadius: 8,
-                      border: "1px solid hsl(var(--border))",
+                      border: "1px solid var(--border)",
+                      background: "var(--popover)",
+                      color: "var(--popover-foreground)",
                       fontSize: 12,
                     }}
                     formatter={(v: number) => [v, "记录"]}

@@ -10,5 +10,9 @@ export default async function AdminLayout({
   const session = await getSession();
   if (!session) redirect("/login");
 
-  return <AdminShell email={session.email}>{children}</AdminShell>;
+  return (
+    <AdminShell email={session.email} role={session.role}>
+      {children}
+    </AdminShell>
+  );
 }
