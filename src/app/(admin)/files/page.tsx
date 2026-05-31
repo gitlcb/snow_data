@@ -9,6 +9,7 @@ import {
 import { api, type ApiResponse } from "@/lib/api-client";
 import { useApps } from "@/hooks/use-apps";
 import { useSiteUrl } from "@/hooks/use-site-url";
+import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
 import {
   Upload,
@@ -126,10 +127,9 @@ export default function FilesPage() {
 
   const handleCopyUrl = async (url: string) => {
     const full = `${siteUrl}${url}`;
-    try {
-      await navigator.clipboard.writeText(full);
+    if (await copyText(full)) {
       toast.success("URL 已复制");
-    } catch {
+    } else {
       toast.error("复制失败");
     }
   };

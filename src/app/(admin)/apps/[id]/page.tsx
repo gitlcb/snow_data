@@ -131,6 +131,7 @@ export default function AppDetailPage() {
   const id = params.id;
   const router = useRouter();
   const queryClient = useQueryClient();
+  const origin = useSiteUrl();
 
   const { data: app, isLoading } = useQuery<AppDetail>({
     queryKey: ["app", id],
@@ -269,7 +270,6 @@ export default function AppDetailPage() {
     return <p className="text-sm text-muted-foreground">应用不存在</p>;
   }
 
-  const origin = useSiteUrl();
   const sampleKey = keys?.[0]?.keyPrefix
     ? `${keys[0].keyPrefix}（你的完整 Key）`
     : "sk_live_xxxxxxxxxxxx";
