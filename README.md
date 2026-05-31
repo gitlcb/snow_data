@@ -380,4 +380,4 @@ docker compose -f docker-compose.prod.yml up -d --force-recreate
 
 ## 许可
 
-个人项目，未附许可证。
+[MIT](./LICENSE) © gitlcb
