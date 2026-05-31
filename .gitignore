@@ -6,6 +6,12 @@ node_modules
 next-env.d.ts
 .env
 .env*.local
+.env.production
 /uploads
 npm-debug.log*
 .DS_Store
+
+# 本地部署辅助与凭证（含服务器密码/密钥，禁止入库）
+/deploy
+/.playwright-mcp
+服务器信息.txt

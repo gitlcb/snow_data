@@ -26,7 +26,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/prisma ./node_modules/prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
+# 不复制 .bin/prisma：它是符号链接，COPY 会解引用成普通文件，导致 CLI 找不到同目录 .wasm。
+# 运行时直接调用 node_modules/prisma/build/index.js（见 compose command）。
 
 USER nextjs
 EXPOSE 3000

@@ -1,0 +1,33 @@
+services:
+  app:
+    build: .
+    container_name: snow_admin
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: "production"
+      # Next standalone 默认绑定 $HOSTNAME（容器主机名→容器 IP），导致容器内 localhost:3000 不通、
+      # HEALTHCHECK 失败。显式绑 0.0.0.0 让其监听所有接口。
+      HOSTNAME: "0.0.0.0"
+    # 宿主机已有 MySQL/Nginx；本 compose 只起 app，不再起内置 db。
+    # 经 host-gateway 让容器以 host.docker.internal 访问宿主机的 MySQL(0.0.0.0:3306)。
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    # 对宿主机发布 3005 → nginx 反代 172.17.0.1:3005（不与现有 3000~3004 冲突）。
+    ports:
+      - "3005:3000"
+    volumes:
+      - uploads:/app/uploads
+    # standalone 产物的 node_modules 不含完整 Prisma CLI 依赖树，无法在本容器内 migrate。
+    # 迁移改由 builder 阶段镜像（snow_admin-migrate）的一次性容器执行（见部署文档）。
+    command: sh -c "node server.js"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  uploads:
