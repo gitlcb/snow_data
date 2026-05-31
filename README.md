@@ -1,4 +1,4 @@
-# Snow Admin — 通用数据存储系统（迷你 BaaS）
+# Snow Data — 通用数据存储系统（迷你 BaaS）
 
 一个跑在 MySQL 上的通用数据存储后端，给个人的各种小 demo 当统一数据仓库。
 
@@ -17,7 +17,8 @@
 - **查询能力**：字段过滤（7 种算子）、排序、分页、字段投影、聚合统计（count/sum/avg/min/max + 分组）、CSV/JSON 导出导入。
 - **文件存储**：multipart 上传到服务器本地磁盘，DB 只存元数据；按 Key 或登录态鉴权访问。
 - **Admin 后台**：仪表盘、应用管理、数据浏览器、文件管理、用量统计、交互式 API 文档页。
-- **超管治理**：用户管理（禁用/删除/角色）、注册开关、上传大小/类型限制、Linux Do OAuth 配置。
+- **开箱即用**：首次部署无需手动建账号 —— 访问站点会自动引导到初始化页，在网页上创建第一个超级管理员（用户名 + 密码）。
+- **超管治理**：用户管理（禁用/删除/角色）、注册开关、上传大小/类型限制、Linux Do OAuth 配置、对外站点地址。
 - **安全**：密码 bcrypt、Key sha256 校验、zod 输入校验、参数化查询、限流、CSRF 同源校验、统一响应信封。
 
 ## 技术栈
@@ -55,15 +56,17 @@ cp .env.example .env
 npm run db:migrate
 #    或纯 SQL 建库： mysql -u root -p < prisma/init.sql
 
-# 4. 灌入示例数据 + 创建登录账号
-npm run db:seed
-#    -> 超管账号 admin@snow.dev / 密码 admin123
-#       （可用 SEED_ADMIN_PASSWORD 覆盖；NODE_ENV=production 时 seed 自动跳过）
-
-# 5. 启动开发服务器
+# 4. 启动开发服务器
 npm run dev
 #    打开 http://localhost:3000
+
+# 5. 首次访问会自动跳到 /setup —— 在网页上创建第一个超级管理员（用户名 + 密码）
+#    之后用该账号登录后台即可。
 ```
+
+> **可选**：想直接灌入示例 App + 数据，可改跑 `npm run db:seed`
+> （创建超管 `admin@snow.dev` / `admin123`，可用 `SEED_ADMIN_PASSWORD` 覆盖）。
+> 跑过 seed 后，由于已存在超管，`/setup` 初始化页会自动失效。两种方式二选一即可。
 
 ### 环境变量
 
@@ -230,21 +233,142 @@ interface ApiResponse<T> {
 | `/files` | 文件管理：上传、预览、复制 URL、删除 |
 | `/usage` | 用量统计：调用总数、状态码分布、按方法分布、近 30 天趋势 |
 | `/docs` | 交互式 API 文档：自动填充示例、复制 AI 提示词 |
-| `/admin-console` | **超管专属**：用户管理、系统设置（注册开关/上传限制）、Linux Do OAuth 配置 |
+| `/setup` | **首次初始化**：仅当库中无超管时可访问，创建第一个超级管理员；初始化后自动失效 |
+| `/admin-console` | **超管专属**：用户管理、系统设置（注册开关/上传限制/站点地址）、Linux Do OAuth 配置 |
 
 后台支持邮箱密码登录与 Linux Do OAuth；暗色模式（亮/暗/跟随系统）。
 
-## 部署（Docker Compose）
+## 部署
+
+提供两套 Docker 方案，按你是否已有 MySQL 选择：
+
+| 方案 | 适用 | compose 文件 | MySQL |
+|---|---|---|---|
+| **A. 一体化** | 全新机器，想连 MySQL 一起拉起 | `docker-compose.yml` | 容器内置 MySQL 8 |
+| **B. 接管自有 MySQL** | 机器上已有 MySQL（与其他服务共用） | `docker-compose.prod.yml` | 复用宿主机现有 MySQL |
+
+两套都把 Next.js 以 standalone 模式打包进镜像，上传文件持久化到 `uploads` 命名卷。
+
+> ⚠️ **迁移要单独跑**：standalone 运行镜像为减体积，不含完整的 Prisma CLI 依赖，**无法在 app 容器内执行 `prisma migrate deploy`**。请按下文用「builder 阶段镜像」跑一次性迁移，再启动 app。
+
+### 方案 A：一体化（内置 MySQL）
 
 ```bash
-# 1. 配置 compose 所需环境变量（MYSQL_ROOT_PASSWORD 等，见 .env.example 末尾）
-# 2. 构建并启动
-docker compose up -d --build
+# 1. 准备环境变量
+cp .env.example .env
+# 编辑 .env，至少设置：
+#   MYSQL_ROOT_PASSWORD="一个强密码"
+#   MYSQL_DATABASE="snow_admin"
+#   DATABASE_URL="mysql://root:上面的强密码@db:3306/snow_admin"   # 注意 host 是服务名 db
+#   JWT_SECRET="$(openssl rand -hex 32)"
+
+# 2. 构建运行镜像 + builder 阶段镜像（后者用于迁移）
+docker compose build
+docker build --target builder -t snow_data-migrate .
+
+# 3. 先启动 db（app 先不急），并应用迁移
+docker compose up -d db
+docker run --rm --network "$(basename "$PWD" | tr '[:upper:]' '[:lower:]')_default" \
+  -e DATABASE_URL="mysql://root:上面的强密码@db:3306/snow_admin" \
+  snow_data-migrate node_modules/.bin/prisma migrate deploy
+#    --network 为 compose 默认网络名（通常是 <目录名小写>_default）；
+#    可用 `docker network ls | grep default` 确认实际名称。
+
+# 4. 启动 app
+docker compose up -d
+
+# 5. 打开 http://<服务器IP>:3000 —— 会自动跳到 /setup 创建第一个管理员
 ```
 
-- `app` 容器启动时执行 `prisma migrate deploy`（幂等应用迁移）后运行 Next.js standalone。
-- `db` 容器为 MySQL 8，数据持久化到命名卷；不对宿主暴露端口。
-- 上传文件持久化到 `uploads` 命名卷（挂载到 `/app/uploads`）。
+> 内置 db 不对宿主暴露 3306（仅 compose 内网用服务名 `db` 访问）。如需外部连库，临时给 db 加 `ports: ["127.0.0.1:3306:3306"]`。
+
+### 方案 B：接管已有 MySQL（推荐用于共享服务器）
+
+适用于机器上已经跑着 MySQL（可能还有 nginx 反代、其他服务）的场景。app 容器经 `host.docker.internal` 访问宿主机的 MySQL。
+
+```bash
+# 1. 在你现有的 MySQL 里建库（utf8mb4）
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS snow_admin \
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+#    确保连库账号能从 Docker 网段访问（如 root 允许 host '%'，或单独建账号授权）。
+
+# 2. 准备 .env.production（被 .gitignore 忽略，不会入库）
+cat > .env.production <<'EOF'
+# host.docker.internal 指向宿主机；端口为你宿主机 MySQL 的端口
+DATABASE_URL="mysql://root:你的MySQL密码@host.docker.internal:3306/snow_admin"
+JWT_SECRET="用 openssl rand -hex 32 生成"
+NODE_ENV="production"
+CORS_ALLOW_ORIGINS="*"
+EOF
+
+# 3. 构建运行镜像 + builder 阶段镜像（后者用于迁移）
+docker compose -f docker-compose.prod.yml build
+docker build --target builder -t snow_data-migrate .
+
+# 4. 跑一次性迁移（builder 镜像里有完整 Prisma CLI）
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL="mysql://root:你的MySQL密码@host.docker.internal:3306/snow_admin" \
+  -w /app snow_data-migrate node_modules/.bin/prisma migrate deploy
+
+# 5. 启动 app（仅 app 容器，默认发布 3005 → 宿主机）
+docker compose -f docker-compose.prod.yml up -d
+
+# 6. 访问 http://<服务器IP>:3005 —— 自动跳 /setup 创建第一个管理员
+```
+
+`docker-compose.prod.yml` 关键点（已内置，无需改）：
+
+- `extra_hosts: ["host.docker.internal:host-gateway"]` —— 让容器能解析到宿主机访问其 MySQL。
+- `HOSTNAME: "0.0.0.0"` —— Next standalone 默认绑容器主机名，会导致容器内 healthcheck 不通；显式绑全接口修复。
+- `ports: ["3005:3000"]` —— 对宿主发布 3005（避开常见占用端口）。改这里调整对外端口。
+
+#### 配在域名 + HTTPS 后面（nginx 反代示例）
+
+app 只监听 HTTP（3005）。用宿主机的 nginx 终止 TLS 并反代：
+
+```nginx
+server {
+    listen 80;
+    server_name data.example.com;
+    location / { return 301 https://$host$request_uri; }
+}
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name data.example.com;
+
+    ssl_certificate     /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+
+    client_max_body_size 50m;   # 文件上传留足余量
+
+    location / {
+        proxy_pass http://127.0.0.1:3005;   # Docker 容器发布的端口
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+> 用域名访问后，到 `/admin-console` → 系统设置 → **站点地址** 填上 `https://data.example.com`。
+> 否则 OAuth 回调、文档示例里的 Base URL 会用容器推断出的地址（可能是 `0.0.0.0`），导致 Linux Do 登录跳转错误。
+
+### 升级（已部署后拉取新代码）
+
+```bash
+git pull
+docker compose -f docker-compose.prod.yml build          # 或不带 -f 用方案 A
+docker build --target builder -t snow_data-migrate .      # 如有新迁移
+docker run --rm --add-host=host.docker.internal:host-gateway \
+  -e DATABASE_URL="...同上..." -w /app \
+  snow_data-migrate node_modules/.bin/prisma migrate deploy   # 有新迁移时才需
+docker compose -f docker-compose.prod.yml up -d --force-recreate
+```
+
+> 迁移是幂等的（`migrate deploy` 只应用未执行过的迁移）；无新迁移时第 3、4 步可跳过。
 
 ## 安全说明
 

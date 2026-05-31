@@ -27,12 +27,15 @@ services:
       DATABASE_URL: ${DATABASE_URL:?set in .env}
       JWT_SECRET: ${JWT_SECRET:?set in .env}
       NODE_ENV: "production"
+      # Next standalone 默认绑容器主机名，会导致容器内 healthcheck 不通；显式绑全接口
+      HOSTNAME: "0.0.0.0"
     ports:
       - "3000:3000"
     volumes:
       - uploads:/app/uploads
-    # 生产用 migrate deploy（幂等、非破坏），而非 db push
-    command: sh -c "node_modules/.bin/prisma migrate deploy && node server.js"
+    # standalone 运行镜像不含完整 Prisma CLI，无法在本容器内 migrate。
+    # 迁移请用 builder 阶段镜像单独跑（见 README 部署章节），本容器只起服务。
+    command: sh -c "node server.js"
     logging:
       driver: json-file
       options:
