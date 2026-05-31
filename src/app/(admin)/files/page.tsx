@@ -8,6 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { api, type ApiResponse } from "@/lib/api-client";
 import { useApps } from "@/hooks/use-apps";
+import { useSiteUrl } from "@/hooks/use-site-url";
 import { toast } from "sonner";
 import {
   Upload,
@@ -71,6 +72,7 @@ export default function FilesPage() {
   const [pendingDelete, setPendingDelete] = useState<FileItem | null>(null);
 
   const { data: apps } = useApps();
+  const siteUrl = useSiteUrl();
 
   const filesKey = ["files", appId] as const;
   const {
@@ -123,7 +125,7 @@ export default function FilesPage() {
   });
 
   const handleCopyUrl = async (url: string) => {
-    const full = `${window.location.origin}${url}`;
+    const full = `${siteUrl}${url}`;
     try {
       await navigator.clipboard.writeText(full);
       toast.success("URL 已复制");

@@ -9,6 +9,7 @@ import {
   resolveAvatar,
   OAUTH_STATE_COOKIE,
 } from "@/lib/oauth-linuxdo";
+import { resolveOrigin } from "@/lib/site-url";
 import { logger } from "@/lib/logger";
 
 const PROVIDER = "linuxdo";
@@ -23,9 +24,11 @@ function loginError(origin: string, code: string): NextResponse {
 }
 
 export async function GET(req: NextRequest) {
-  const origin = new URL(req.url).origin;
+  // 默认按请求推断；读到 cfg 后用配置的站点地址覆盖（与容器绑定地址解耦）
+  let origin = new URL(req.url).origin;
   try {
     const cfg = await getSystemConfig();
+    origin = resolveOrigin(cfg.siteUrl, req);
     if (!cfg.linuxdoEnabled || !cfg.linuxdoClientId || !cfg.linuxdoClientSecret) {
       return loginError(origin, "disabled");
     }

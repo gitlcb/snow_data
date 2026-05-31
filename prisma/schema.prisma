@@ -132,6 +132,7 @@ model UsageStat {
 // 全局系统配置：单行表（id 固定 "singleton"）
 model SystemConfig {
   id                  String   @id @default("singleton")
+  siteUrl             String   @default("") @map("site_url") @db.VarChar(255) // 对外站点地址；空=按请求自动识别
   registrationOpen    Boolean  @default(true) @map("registration_open")
   linuxdoEnabled      Boolean  @default(false) @map("linuxdo_enabled")
   linuxdoClientId     String?  @map("linuxdo_client_id")

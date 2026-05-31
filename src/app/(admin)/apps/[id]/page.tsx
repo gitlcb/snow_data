@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api-client";
+import { useSiteUrl } from "@/hooks/use-site-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -268,8 +269,7 @@ export default function AppDetailPage() {
     return <p className="text-sm text-muted-foreground">应用不存在</p>;
   }
 
-  const origin =
-    typeof window !== "undefined" ? window.location.origin : "https://your-host";
+  const origin = useSiteUrl();
   const sampleKey = keys?.[0]?.keyPrefix
     ? `${keys[0].keyPrefix}（你的完整 Key）`
     : "sk_live_xxxxxxxxxxxx";

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { getSystemConfig } from "@/lib/system-config";
 import { buildAuthorizeUrl, OAUTH_STATE_COOKIE } from "@/lib/oauth-linuxdo";
+import { resolveOrigin } from "@/lib/site-url";
 import { logger } from "@/lib/logger";
 
 // 发起 Linux Do 登录：校验已启用 + 已配置，生成 state 防 CSRF，302 跳转授权页
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const origin = new URL(req.url).origin;
+    const origin = resolveOrigin(cfg.siteUrl, req);
     const redirectUri = `${origin}/api/auth/oauth/linuxdo/callback`;
     const state = randomBytes(16).toString("hex");
 

@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export interface SystemConfigData {
   id: string;
+  siteUrl: string;
   registrationOpen: boolean;
   linuxdoEnabled: boolean;
   linuxdoClientId: string | null;
