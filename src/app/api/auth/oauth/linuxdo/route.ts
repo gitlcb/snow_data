@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { getSystemConfig } from "@/lib/system-config";
 import { buildAuthorizeUrl, OAUTH_STATE_COOKIE } from "@/lib/oauth-linuxdo";
 import { resolveOrigin } from "@/lib/site-url";
+import { isRequestSecure } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 
 // 发起 Linux Do 登录：校验已启用 + 已配置，生成 state 防 CSRF，302 跳转授权页
@@ -30,7 +31,7 @@ export async function GET(req: NextRequest) {
     // state 存 httpOnly cookie，回调时比对
     res.cookies.set(OAUTH_STATE_COOKIE, state, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: await isRequestSecure(),
       sameSite: "lax",
       maxAge: 600, // 10 分钟
       path: "/",

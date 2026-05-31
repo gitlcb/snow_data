@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { COOKIE_NAME, SESSION_MAX_AGE, getJwtSecret } from "@/lib/auth-secret";
 
 const MAX_AGE = SESSION_MAX_AGE;
@@ -9,6 +9,21 @@ export interface SessionPayload {
   userId: string;
   email: string;
   role: string; // user | superadmin
+}
+
+/**
+ * 判断「浏览器→边缘」这一跳是否走 HTTPS，用于决定 cookie 的 Secure 标志。
+ * 反代（nginx `proxy_set_header X-Forwarded-Proto $scheme;`，且会覆盖客户端伪造值）
+ * 与 Cloudflare 会带上 x-forwarded-proto；纯 HTTP 直连时该头缺失，按非安全处理。
+ * 误判为非安全只会少一点加固（非 Secure cookie 在 HTTPS 下照样发送），不会让登录失效。
+ */
+export async function isRequestSecure(): Promise<boolean> {
+  try {
+    const proto = (await headers()).get("x-forwarded-proto");
+    return proto?.split(",")[0]?.trim().toLowerCase() === "https";
+  } catch {
+    return false;
+  }
 }
 
 export async function hashPassword(plain: string): Promise<string> {
@@ -32,7 +47,7 @@ export async function createSession(payload: SessionPayload): Promise<void> {
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: await isRequestSecure(),
     sameSite: "lax",
     maxAge: MAX_AGE,
     path: "/",
