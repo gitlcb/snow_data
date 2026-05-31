@@ -7,7 +7,8 @@ import { rateLimit, clientIp } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
 const schema = z.object({
-  email: z.string().email("邮箱格式不正确"),
+  // 账号标识符：可为邮箱，也可为纯用户名（如内置超管 admin）
+  email: z.string().trim().min(1, "请输入账号"),
   password: z.string().min(6, "密码至少 6 位"),
 });
 

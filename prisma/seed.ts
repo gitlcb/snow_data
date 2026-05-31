@@ -16,12 +16,15 @@ function genKey() {
 }
 
 async function main() {
-  if (process.env.NODE_ENV === "production") {
+  // 生产环境默认跳过整套示例数据；但允许用 SEED_ADMIN_FORCE=1 仅创建超管账号
+  const isProd = process.env.NODE_ENV === "production";
+  const force = process.env.SEED_ADMIN_FORCE === "1";
+  if (isProd && !force) {
     console.log("生产环境禁止运行 seed，已跳过。");
     return;
   }
 
-  const email = "admin@snow.dev";
+  const email = process.env.SEED_ADMIN_EMAIL ?? "admin@snow.dev";
   const password = process.env.SEED_ADMIN_PASSWORD ?? "admin123";
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -46,6 +49,14 @@ async function main() {
       role: "superadmin",
     },
   });
+
+  // 生产环境（force 模式）只建超管账号，不灌示例 App/数据
+  if (isProd) {
+    console.log("已创建超级管理员账号：");
+    console.log(`  登录账号: ${email} / ${password}`);
+    return;
+  }
+
 
   const app = await prisma.app.create({
     data: {
