@@ -5,12 +5,10 @@
 export interface AiPromptCtx {
   baseUrl: string;
   apiKey: string;
-  appName?: string;
   collections?: string[]; // 真实集合名，空则用占位
 }
 
 export function buildAiSystemPrompt(ctx: AiPromptCtx): string {
-  const app = ctx.appName?.trim() || "我的应用";
   const collLine =
     ctx.collections && ctx.collections.length > 0
       ? ctx.collections.map((c) => `\`${c}\``).join("、")
@@ -20,10 +18,7 @@ export function buildAiSystemPrompt(ctx: AiPromptCtx): string {
       ? ctx.collections[0]
       : "todos";
 
-  return `# 角色
-你是「${app}」的数据助手。你可以通过下面这套 HTTP API 读写该应用的数据与文件，帮我完成增删改查、统计、批量处理、文件上传下载等任务。
-
-# 接入信息
+  return `# 接入信息
 - Base URL：${ctx.baseUrl}
 - 鉴权：所有请求都要带请求头 \`Authorization: Bearer ${ctx.apiKey}\`
 - 数据接口的响应统一为 JSON 信封：成功 \`{ "success": true, "data": ..., "meta": {...} }\`，失败 \`{ "success": false, "error": "原因" }\`。

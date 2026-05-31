@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Eye, EyeOff, Sparkles, KeyRound, BookOpen } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useApps } from "@/hooks/use-apps";
+import { useSiteUrl } from "@/hooks/use-site-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -67,11 +68,8 @@ export default function DocsPage() {
   const [appId, setAppId] = useState("");
   const [apiKey, setApiKey] = useState(""); // 完整 key（粘贴或生成），仅前端内存
   const [showKey, setShowKey] = useState(false);
-  // baseUrl 在客户端挂载后才填真实 origin：SSR 与首次客户端渲染都用占位，避免 hydration mismatch
-  const [baseUrl, setBaseUrl] = useState("https://your-host");
-  useEffect(() => {
-    setBaseUrl(window.location.origin);
-  }, []);
+  // Base URL 优先用超管配置的网站地址，未配置回退到浏览器 origin（hydration 安全）
+  const baseUrl = useSiteUrl();
 
   // 该 App 的 Key 列表（只用于对照展示，前缀不可直接调用）
   const { data: keys } = useQuery<ApiKeyItem[]>({
@@ -121,17 +119,14 @@ export default function DocsPage() {
     collection: sampleCollection,
   };
 
-  const appName = apps?.find((a) => a.id === appId)?.name;
-
   const aiPrompt = useMemo(
     () =>
       buildAiSystemPrompt({
         baseUrl,
         apiKey: apiKey.trim() || KEY_PLACEHOLDER,
-        appName,
         collections: collectionNames,
       }),
-    [baseUrl, apiKey, appName, collectionNames],
+    [baseUrl, apiKey, collectionNames],
   );
 
   const hasRealKey = !!apiKey.trim();

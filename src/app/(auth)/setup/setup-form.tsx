@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Snowflake, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -23,40 +22,38 @@ interface AuthData {
   email: string;
 }
 
-export default function RegisterPage() {
+export function SetupForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
+    if (password !== confirm) {
+      toast.error("两次输入的密码不一致");
+      return;
+    }
     setLoading(true);
     try {
-      const payload: { email: string; password: string; name?: string } = {
-        email,
+      const { data } = await api.post<ApiResponse<AuthData>>("/auth/setup", {
+        username,
         password,
-      };
-      const trimmed = name.trim();
-      if (trimmed) payload.name = trimmed;
-
-      const { data } = await api.post<ApiResponse<AuthData>>(
-        "/auth/register",
-        payload,
-      );
+        confirm,
+      });
       if (!data.success) {
-        toast.error(data.error ?? "注册失败");
+        toast.error(data.error ?? "初始化失败");
         return;
       }
-      toast.success("注册成功");
+      toast.success("管理员账号已创建");
       router.push("/dashboard");
       router.refresh();
     } catch (err: unknown) {
       const message =
         (err as { response?: { data?: ApiResponse<unknown> } })?.response?.data
-          ?.error ?? "注册失败，请稍后重试";
+          ?.error ?? "初始化失败，请稍后重试";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -73,21 +70,23 @@ export default function RegisterPage() {
       </div>
       <Card className="shadow-xl border-border/60">
         <CardHeader>
-          <CardTitle className="text-lg">创建账号</CardTitle>
-          <CardDescription>注册一个新账号开始使用</CardDescription>
+          <CardTitle className="text-lg">初始化管理员</CardTitle>
+          <CardDescription>
+            这是首次部署，请创建第一个管理员账号。该账号拥有最高权限。
+          </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">邮箱</Label>
+              <Label htmlFor="username">用户名</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
+                id="username"
+                type="text"
+                placeholder="登录用的账号，如 admin"
+                autoComplete="username"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 disabled={loading}
               />
             </div>
@@ -96,45 +95,35 @@ export default function RegisterPage() {
               <Input
                 id="password"
                 type="password"
-                placeholder="至少 6 位"
+                placeholder="至少 8 位"
                 autoComplete="new-password"
                 required
-                minLength={6}
+                minLength={8}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">
-                名称{" "}
-                <span className="text-muted-foreground font-normal">（可选）</span>
-              </Label>
+              <Label htmlFor="confirm">确认密码</Label>
               <Input
-                id="name"
-                type="text"
-                placeholder="你的昵称"
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                id="confirm"
+                type="password"
+                placeholder="再次输入密码"
+                autoComplete="new-password"
+                required
+                minLength={8}
+                value={confirm}
+                onChange={(e) => setConfirm(e.target.value)}
                 disabled={loading}
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
+          <CardFooter>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {loading ? "处理中…" : "注册"}
+              {loading ? "处理中…" : "创建管理员并进入"}
             </Button>
-            <p className="text-sm text-muted-foreground">
-              已有账号？{" "}
-              <Link
-                href="/login"
-                className="text-primary font-medium hover:underline"
-              >
-                去登录
-              </Link>
-            </p>
           </CardFooter>
         </form>
       </Card>

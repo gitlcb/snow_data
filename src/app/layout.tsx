@@ -4,7 +4,7 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Snow Admin — 通用数据存储",
+  title: "Snow Data — 通用数据存储",
   description: "迷你 BaaS：给你的小 demo 当统一后端仓库",
 };
 

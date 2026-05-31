@@ -26,6 +26,7 @@ interface AuthData {
 interface PublicConfig {
   registrationOpen: boolean;
   linuxdoEnabled: boolean;
+  needsSetup?: boolean;
 }
 
 const OAUTH_ERROR_MSG: Record<string, string> = {
@@ -48,7 +49,15 @@ export default function LoginPage() {
   useEffect(() => {
     api
       .get<ApiResponse<PublicConfig>>("/auth/public-config")
-      .then((r) => setConfig(r.data.data ?? null))
+      .then((r) => {
+        const cfg = r.data.data ?? null;
+        // 全新部署（无超管）：引导去初始化页
+        if (cfg?.needsSetup) {
+          router.replace("/setup");
+          return;
+        }
+        setConfig(cfg);
+      })
       .catch(() => setConfig(null));
 
     // 处理 OAuth 回调带回的错误
@@ -58,7 +67,7 @@ export default function LoginPage() {
       toast.error(OAUTH_ERROR_MSG[err] ?? "登录失败");
       window.history.replaceState({}, "", "/login");
     }
-  }, []);
+  }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -92,7 +101,7 @@ export default function LoginPage() {
         <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
           <Snowflake className="h-6 w-6" />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">Snow Admin</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Snow Data</h1>
       </div>
       <Card className="shadow-xl border-border/60">
         <CardHeader>
@@ -102,12 +111,12 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">邮箱</Label>
+              <Label htmlFor="email">账号</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="you@example.com"
-                autoComplete="email"
+                type="text"
+                placeholder="邮箱或用户名"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

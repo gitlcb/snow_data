@@ -72,6 +72,7 @@ interface UserStats {
 }
 
 interface SysConfig {
+  siteUrl: string;
   registrationOpen: boolean;
   linuxdoEnabled: boolean;
   linuxdoClientId: string;
@@ -687,6 +688,7 @@ function SettingsTab() {
 
   const [maxMb, setMaxMb] = useState("");
   const [mime, setMime] = useState("");
+  const [site, setSite] = useState("");
 
   const mutation = useMutation({
     mutationFn: (patch: Record<string, unknown>) =>
@@ -712,6 +714,42 @@ function SettingsTab() {
 
   return (
     <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>网站地址</CardTitle>
+          <CardDescription>
+            对外访问地址，用于 OAuth 登录回调与文档示例链接。留空＝按请求自动识别（容器部署时可能识别错，建议显式填写）。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="site-url">
+            站点地址，当前：{cfg.siteUrl || "（未配置，自动识别）"}
+          </Label>
+          <div className="flex gap-2">
+            <Input
+              id="site-url"
+              type="url"
+              placeholder={cfg.siteUrl || "https://data.snownk.xyz"}
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+            />
+            <Button
+              variant="outline"
+              disabled={mutation.isPending}
+              onClick={() => {
+                mutation.mutate({ siteUrl: site.trim() });
+                setSite("");
+              }}
+            >
+              保存
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            示例：https://data.snownk.xyz（不要带结尾斜杠，留空可清除）
+          </p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>注册设置</CardTitle>
@@ -844,6 +882,17 @@ function LinuxDoTab() {
         <CardTitle>Linux Do 登录</CardTitle>
         <CardDescription>
           配置 Linux Do Connect OAuth，允许用户用 Linux Do 账号登录。
+          <br />
+          用以支持通过 Linux DO 进行登录注册，
+          <a
+            href="https://connect.linux.do/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary font-medium hover:underline"
+          >
+            点击此处
+          </a>
+          管理你的 LinuxDO OAuth App。
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -61,7 +61,7 @@ export function AdminShell({
       <aside className="sticky top-0 flex h-screen w-60 shrink-0 flex-col border-r bg-sidebar">
         <div className="flex h-14 shrink-0 items-center gap-2 border-b px-5">
           <Snowflake className="h-5 w-5 text-primary" />
-          <span className="font-semibold tracking-tight">Snow Admin</span>
+          <span className="font-semibold tracking-tight">Snow Data</span>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
           {nav.map((item) => {
